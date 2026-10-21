@@ -1,0 +1,407 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>DeployGuard — Deployment Failure Detection & Rollback Platform</title>
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <!-- Header / Navigation Bar -->
+  <header class="app-header">
+    <div class="header-container">
+      <div class="brand">
+        <span class="brand-icon">🛡️</span>
+        <div class="brand-text">
+          <h1>DeployGuard</h1>
+          <span class="subtitle">Failure Detection & Rollback Platform</span>
+        </div>
+      </div>
+      <nav class="nav-links">
+        <button class="nav-btn active" data-tab="dashboard">Dashboard</button>
+        <button class="nav-btn" data-tab="applications">Applications</button>
+        <button class="nav-btn" data-tab="deployments">Deployments</button>
+        <button class="nav-btn" data-tab="incidents">Incidents</button>
+        <button class="nav-btn" data-tab="checks">Health History</button>
+        <button class="nav-btn" data-tab="rollbacks">Rollbacks</button>
+      </nav>
+      <div class="header-actions">
+        <button id="btn-export-csv" class="btn btn-secondary btn-sm" title="Download Incidents as CSV">
+          📥 Export CSV
+        </button>
+        <button id="btn-refresh-all" class="btn btn-outline btn-sm" title="Refresh all data">
+          🔄 Refresh
+        </button>
+      </div>
+    </div>
+  </header>
+
+  <!-- Global Alert/Notification Toast Banner -->
+  <div id="toast-container" class="toast-container"></div>
+
+  <!-- Main Content Container -->
+  <main class="main-container">
+    
+    <!-- 1. DASHBOARD TAB -->
+    <section id="tab-dashboard" class="tab-content active">
+      <div class="section-header">
+        <div>
+          <h2>System Overview</h2>
+          <p class="section-desc">Real-time status of registered applications, active incidents, and recent releases.</p>
+        </div>
+        <div>
+          <button class="btn btn-primary" onclick="openModal('modal-register-app')">+ Register App</button>
+        </div>
+      </div>
+
+      <!-- Stat Cards -->
+      <div class="stats-grid">
+        <div class="stat-card">
+          <div class="stat-label">Total Applications</div>
+          <div class="stat-value" id="stat-total-apps">0</div>
+          <div class="stat-sub">Monitored targets</div>
+        </div>
+        <div class="stat-card card-healthy">
+          <div class="stat-label">Healthy Applications</div>
+          <div class="stat-value" id="stat-healthy-apps">0</div>
+          <div class="stat-sub">Passing latest check</div>
+        </div>
+        <div class="stat-card card-unhealthy">
+          <div class="stat-label">Unhealthy Applications</div>
+          <div class="stat-value" id="stat-unhealthy-apps">0</div>
+          <div class="stat-sub">Failing or active alert</div>
+        </div>
+        <div class="stat-card card-incidents">
+          <div class="stat-label">Active Incidents</div>
+          <div class="stat-value" id="stat-active-incidents">0</div>
+          <div class="stat-sub">Open failure investigations</div>
+        </div>
+      </div>
+
+      <!-- Recent Deployments Snapshot -->
+      <div class="panel">
+        <div class="panel-header">
+          <h3>Recent Deployment Activity</h3>
+          <button class="btn btn-sm btn-outline" onclick="switchTab('deployments')">View All Deployments</button>
+        </div>
+        <div class="table-container">
+          <table class="data-table">
+            <thead>
+              <tr>
+                <th>App Name</th>
+                <th>Version</th>
+                <th>Status</th>
+                <th>Timestamp (UTC)</th>
+                <th>Notes</th>
+              </tr>
+            </thead>
+            <tbody id="dashboard-recent-deployments">
+              <tr><td colspan="5" class="empty-state">Loading deployment activity...</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </section>
+
+    <!-- 2. APPLICATIONS TAB -->
+    <section id="tab-applications" class="tab-content">
+      <div class="section-header">
+        <div>
+          <h2>Registered Applications</h2>
+          <p class="section-desc">Manage your microservices and verify their availability.</p>
+        </div>
+        <button class="btn btn-primary" onclick="openModal('modal-register-app')">+ Register Application</button>
+      </div>
+
+      <div class="panel">
+        <div class="table-container">
+          <table class="data-table">
+            <thead>
+              <tr>
+                <th>Application Name</th>
+                <th>Base URL</th>
+                <th>Health Check URL</th>
+                <th>Expected Status</th>
+                <th>Current Health</th>
+                <th>Last Latency</th>
+                <th>Actions</th>
+              </tr>
+            </thead>
+            <tbody id="apps-table-body">
+              <tr><td colspan="7" class="empty-state">Loading applications...</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </section>
+
+    <!-- 3. DEPLOYMENTS TAB -->
+    <section id="tab-deployments" class="tab-content">
+      <div class="section-header">
+        <div>
+          <h2>Deployment History</h2>
+          <p class="section-desc">Record releases, track versions, and initiate rollbacks when needed.</p>
+        </div>
+        <button class="btn btn-primary" onclick="openModal('modal-record-deployment')">+ Record Deployment</button>
+      </div>
+
+      <div class="panel">
+        <div class="table-container">
+          <table class="data-table">
+            <thead>
+              <tr>
+                <th>Deployment ID</th>
+                <th>Application</th>
+                <th>Version</th>
+                <th>Status</th>
+                <th>Recorded At (UTC)</th>
+                <th>Notes</th>
+                <th>Actions</th>
+              </tr>
+            </thead>
+            <tbody id="deployments-table-body">
+              <tr><td colspan="7" class="empty-state">Loading deployments...</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </section>
+
+    <!-- 4. INCIDENTS TAB -->
+    <section id="tab-incidents" class="tab-content">
+      <div class="section-header">
+        <div>
+          <h2>Incident Management</h2>
+          <p class="section-desc">Failure detection records triggered by unhealthy checks. Consecutive failures are deduplicated.</p>
+        </div>
+        <div class="filter-actions">
+          <select id="filter-incident-status" class="form-input form-input-sm">
+            <option value="">All Incidents</option>
+            <option value="OPEN">Open Incidents</option>
+            <option value="RESOLVED">Resolved Incidents</option>
+          </select>
+          <button class="btn btn-secondary btn-sm" onclick="exportIncidentCsv()">📥 Export CSV</button>
+        </div>
+      </div>
+
+      <div class="panel">
+        <div class="table-container">
+          <table class="data-table">
+            <thead>
+              <tr>
+                <th>Incident ID</th>
+                <th>Application</th>
+                <th>Status</th>
+                <th>Failure Reason</th>
+                <th>Opened At (UTC)</th>
+                <th>Resolved At (UTC)</th>
+                <th>Action</th>
+              </tr>
+            </thead>
+            <tbody id="incidents-table-body">
+              <tr><td colspan="7" class="empty-state">Loading incidents...</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </section>
+
+    <!-- 5. HEALTH CHECKS HISTORY TAB -->
+    <section id="tab-checks" class="tab-content">
+      <div class="section-header">
+        <div>
+          <h2>Health Check History</h2>
+          <p class="section-desc">Log of recent HTTP status verification probes and response latencies.</p>
+        </div>
+      </div>
+
+      <div class="panel">
+        <div class="table-container">
+          <table class="data-table">
+            <thead>
+              <tr>
+                <th>Check ID</th>
+                <th>Application</th>
+                <th>Status</th>
+                <th>HTTP Code</th>
+                <th>Latency (ms)</th>
+                <th>Checked At (UTC)</th>
+                <th>Error / Details</th>
+              </tr>
+            </thead>
+            <tbody id="checks-table-body">
+              <tr><td colspan="7" class="empty-state">Loading health check history...</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </section>
+
+    <!-- 6. ROLLBACK WORKFLOW TAB -->
+    <section id="tab-rollbacks" class="tab-content">
+      <div class="section-header">
+        <div>
+          <h2>Rollback Workflow</h2>
+          <p class="section-desc">Controlled deployment rollback automation and auditing.</p>
+        </div>
+        <button class="btn btn-warning" onclick="openModal('modal-initiate-rollback')">⚠️ Initiate Rollback</button>
+      </div>
+
+      <div class="alert-box alert-info">
+        <strong>ℹ️ Simulated Rollback Architecture:</strong>
+        This MVP demonstrates a modular rollback workflow. Executing a rollback records the event, updates the source deployment, and records a target deployment state without directly altering external production clusters until AWS CodeDeploy/ECS integration is connected.
+      </div>
+
+      <div class="panel">
+        <div class="panel-header">
+          <h3>Rollback Audit Log</h3>
+        </div>
+        <div class="table-container">
+          <table class="data-table">
+            <thead>
+              <tr>
+                <th>Rollback ID</th>
+                <th>Application</th>
+                <th>Source Version</th>
+                <th>Target Version</th>
+                <th>Status</th>
+                <th>Timestamp (UTC)</th>
+              </tr>
+            </thead>
+            <tbody id="rollbacks-table-body">
+              <tr><td colspan="6" class="empty-state">No rollback events recorded yet.</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </section>
+
+  </main>
+
+  <!-- MODALS -->
+
+  <!-- Modal: Register Application -->
+  <div id="modal-register-app" class="modal-backdrop">
+    <div class="modal">
+      <div class="modal-header">
+        <h3>Register New Application</h3>
+        <button class="modal-close" onclick="closeModal('modal-register-app')">&times;</button>
+      </div>
+      <form id="form-register-app" onsubmit="handleRegisterApp(event)">
+        <div class="modal-body">
+          <div class="form-group">
+            <label for="app-name">Application Name *</label>
+            <input type="text" id="app-name" class="form-input" placeholder="e.g. Orders Microservice" required maxlength="100">
+          </div>
+          <div class="form-group">
+            <label for="app-base-url">Base URL *</label>
+            <input type="url" id="app-base-url" class="form-input" placeholder="e.g. https://api.example.com" required>
+            <small class="form-hint">Must begin with http:// or https://</small>
+          </div>
+          <div class="form-group">
+            <label for="app-health-url">Health Check URL *</label>
+            <input type="url" id="app-health-url" class="form-input" placeholder="e.g. https://api.example.com/health" required>
+            <small class="form-hint">SSRF protection blocks localhost and private IPs.</small>
+          </div>
+          <div class="form-group">
+            <label for="app-expected-code">Expected HTTP Status Code</label>
+            <input type="number" id="app-expected-code" class="form-input" value="200" min="100" max="599" required>
+          </div>
+        </div>
+        <div class="modal-footer">
+          <button type="button" class="btn btn-outline" onclick="closeModal('modal-register-app')">Cancel</button>
+          <button type="submit" class="btn btn-primary" id="btn-submit-app">Register</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <!-- Modal: Record Deployment -->
+  <div id="modal-record-deployment" class="modal-backdrop">
+    <div class="modal">
+      <div class="modal-header">
+        <h3>Record Deployment</h3>
+        <button class="modal-close" onclick="closeModal('modal-record-deployment')">&times;</button>
+      </div>
+      <form id="form-record-deployment" onsubmit="handleRecordDeployment(event)">
+        <div class="modal-body">
+          <div class="form-group">
+            <label for="deploy-app-select">Application *</label>
+            <select id="deploy-app-select" class="form-input" required>
+              <option value="">Select an application...</option>
+            </select>
+          </div>
+          <div class="form-group">
+            <label for="deploy-version">Version / Release Tag *</label>
+            <input type="text" id="deploy-version" class="form-input" placeholder="e.g. v1.2.0 or sha-8f2a1b" required maxlength="50">
+          </div>
+          <div class="form-group">
+            <label for="deploy-status">Deployment Status</label>
+            <select id="deploy-status" class="form-input">
+              <option value="SUCCESS">SUCCESS</option>
+              <option value="FAILED">FAILED</option>
+              <option value="PENDING">PENDING</option>
+            </select>
+          </div>
+          <div class="form-group">
+            <label for="deploy-notes">Deployment Notes</label>
+            <textarea id="deploy-notes" class="form-input" rows="3" placeholder="Optional notes about release changes, commit hashes, or rollout details..."></textarea>
+          </div>
+        </div>
+        <div class="modal-footer">
+          <button type="button" class="btn btn-outline" onclick="closeModal('modal-record-deployment')">Cancel</button>
+          <button type="submit" class="btn btn-primary" id="btn-submit-deployment">Save Deployment</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <!-- Modal: Initiate Rollback -->
+  <div id="modal-initiate-rollback" class="modal-backdrop">
+    <div class="modal">
+      <div class="modal-header">
+        <h3>Initiate Rollback</h3>
+        <button class="modal-close" onclick="closeModal('modal-initiate-rollback')">&times;</button>
+      </div>
+      <form id="form-initiate-rollback" onsubmit="handleInitiateRollback(event)">
+        <div class="modal-body">
+          <div class="alert-box alert-warning">
+            <strong>Confirm Rollback Action:</strong>
+            Rolling back will mark the source deployment as ROLLED_BACK and generate a new deployment record pointing to the target version.
+          </div>
+          <div class="form-group">
+            <label for="rollback-app-select">Application *</label>
+            <select id="rollback-app-select" class="form-input" onchange="populateRollbackDeployments(this.value)" required>
+              <option value="">Select an application...</option>
+            </select>
+          </div>
+          <div class="form-group">
+            <label for="rollback-source-select">Source Deployment (Faulty Release) *</label>
+            <select id="rollback-source-select" class="form-input" required>
+              <option value="">Select source deployment...</option>
+            </select>
+          </div>
+          <div class="form-group">
+            <label for="rollback-target-select">Target Deployment (Target Version to Restore) *</label>
+            <select id="rollback-target-select" class="form-input" required>
+              <option value="">Select target deployment...</option>
+            </select>
+          </div>
+        </div>
+        <div class="modal-footer">
+          <button type="button" class="btn btn-outline" onclick="closeModal('modal-initiate-rollback')">Cancel</button>
+          <button type="submit" class="btn btn-warning" id="btn-submit-rollback">Execute Rollback</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <footer class="app-footer">
+    <div class="footer-container">
+      <p>DeployGuard &copy; 2026 — Cloud Computing Mini-Project | Designed for Local MVP & Future AWS Integration</p>
+    </div>
+  </footer>
+
+  <script src="app.js"></script>
+</body>
+</html>
